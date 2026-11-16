@@ -58,7 +58,7 @@ export class ProactiveClient {
     this.store.save({ accessToken: data.access_token, refreshToken: data.refresh_token }, this.seedRefreshToken);
   }
 
-  async request(method: "GET" | "POST" | "PATCH", path: string, opts: { query?: Query; body?: unknown } = {}): Promise<unknown> {
+  async request(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, opts: { query?: Query; body?: unknown } = {}): Promise<unknown> {
     if (needsRefresh(this.store.get().accessToken)) await this.refresh();
 
     for (let attempt = 0; attempt < 2; attempt++) {

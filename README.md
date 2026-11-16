@@ -39,13 +39,19 @@ It opens no network port. The production MCP container is not involved.
 
 ## Tools
 
-Read: `me_get`, `projects_list`, `tasks_list`, `task_get`, `task_pull_requests_list`,
-`github_pull_requests_list`, `github_pull_request_get`, `github_pull_request_logs_get`,
-`knowledge_prompts_list`, `knowledge_runbooks_list`.
-Write: `task_update_status` (status only), `task_link_pull_request`.
+Read: `me_get`, `projects_list`, `project_get`, `tasks_list`, `task_get`, `task_pull_requests_list`,
+`github_pull_requests_list`, `github_pull_request_get`, `github_pull_request_logs_get`, and
+`knowledge_<kind>_list` / `knowledge_<kind>_get`.
+Write: `project_create`, `project_update`, `task_create`, `task_update`, `task_update_status`,
+`task_link_pull_request`, and `knowledge_<kind>_create` / `_update`.
+Destructive (flagged `destructiveHint`): `project_delete`, `task_delete`, `knowledge_<kind>_delete`.
 
-There are no delete, project-management, report or assistant tools. The same limits are enforced
-server-side by Proactive, so a leaked token cannot do more than this list.
+`<kind>` is one of `prompt`, `runbook`, `command`, `resource`, `category`. Proactive has no hard project delete,
+so `project_delete` sets the status to `DISCARDED` (reversible with `project_update`). Tokens limited to specific
+projects cannot create projects, and the knowledge vault is per user, not per project.
+
+There are no repository-management, report or assistant tools. Limits are enforced server-side by Proactive,
+so a leaked token cannot do more than this list. Use a read-only token (no `write` scope) if you want no writes.
 
 ## Tokens
 

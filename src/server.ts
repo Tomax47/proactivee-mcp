@@ -20,7 +20,7 @@ export function createServer(client: ProactiveClient): McpServer {
       def.name,
       def.description,
       def.shape,
-      { readOnlyHint: def.readOnly, destructiveHint: false, openWorldHint: false },
+      { readOnlyHint: def.readOnly, destructiveHint: def.destructive, openWorldHint: false },
       async (args: Record<string, unknown>) => {
         try {
           const parsed = z.object(def.shape).parse(args);
