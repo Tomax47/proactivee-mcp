@@ -31,7 +31,15 @@ export class ProactiveClient {
     this.seedRefreshToken = config.refreshToken;
   }
 
+  /** Remote (OAuth) mode passes a bearer through and cannot refresh it. */
+  private get canRefresh(): boolean {
+    return this.store.get().refreshToken !== "";
+  }
+
   private async refresh(): Promise<void> {
+    if (!this.canRefresh) {
+      throw new ApiError(401, "Proactive access expired or was revoked. Reconnect the Proactive MCP server to sign in again.");
+    }
     this.refreshing ??= this.doRefresh().finally(() => {
       this.refreshing = null;
     });
@@ -59,7 +67,7 @@ export class ProactiveClient {
   }
 
   async request(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, opts: { query?: Query; body?: unknown } = {}): Promise<unknown> {
-    if (needsRefresh(this.store.get().accessToken)) await this.refresh();
+    if (this.canRefresh && needsRefresh(this.store.get().accessToken)) await this.refresh();
 
     for (let attempt = 0; attempt < 2; attempt++) {
       const url = new URL(`${this.config.baseUrl}${path}`);
