@@ -67,3 +67,28 @@ yarn typecheck && yarn test && yarn build
 ```
 
 When you add a tool here, add its route to the allowlist in Proactive (`lib/api-tokens/ide-policy.ts`).
+
+## Remote mode (OAuth, no token to paste)
+
+`build/http.js` is a stateless Streamable HTTP server for hosting (for example
+at `https://mcp.proactivee.dev`). Users add the URL to their client and sign in
+through the browser; the Proactive app is the OAuth server (login, consent,
+project selection, token issuing, revocation under Access > IDE).
+
+```
+claude mcp add --transport http proactive https://mcp.proactivee.dev/mcp
+```
+
+For Cursor, add `{"mcpServers":{"proactive":{"url":"https://mcp.proactivee.dev/mcp"}}}`
+to `mcp.json`.
+
+Environment (no secrets, no database access):
+
+| Variable | Meaning |
+| --- | --- |
+| `PROACTIVE_BASE_URL` | Public URL of the Proactive app (OAuth server and API) |
+| `MCP_PUBLIC_URL` | Public URL of this server, e.g. `https://mcp.proactivee.dev` |
+| `PORT` | Listen port (default 3000) |
+
+Run with `docker build -t proactive-ide-mcp .` or `yarn build && yarn start:http`.
+A health check is available at `/healthz`. The stdio mode above keeps working.

@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc && chmod +x build/index.js",
     "dev": "tsx src/index.ts",
+    "start:http": "node build/http.js",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "prepare": "npm run build"
