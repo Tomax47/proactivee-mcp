@@ -88,7 +88,7 @@ Environment (no secrets, no database access):
 | --- | --- |
 | `PROACTIVE_BASE_URL` | Public URL of the Proactive app (OAuth server and API) |
 | `MCP_PUBLIC_URL` | Public URL of this server, e.g. `https://mcp.proactivee.dev` |
-| `PORT` | Listen port (default 3000) |
+| `PORT` | Listen port (default 4600) |
 
 Run with `docker build -t proactive-ide-mcp .` or `yarn build && yarn start:http`.
 A health check is available at `/healthz`. The stdio mode above keeps working.

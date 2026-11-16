@@ -17,7 +17,7 @@ const MAX_BODY_BYTES = 1_000_000;
 
 const baseUrl = assertSafeBaseUrl(process.env.PROACTIVE_BASE_URL ?? "");
 const publicUrl = assertSafeBaseUrl(process.env.MCP_PUBLIC_URL ?? "");
-const port = Number(process.env.PORT) || 3000;
+const port = Number(process.env.PORT) || 4600;
 const timeoutMs = Number(process.env.PROACTIVE_TIMEOUT_MS) || 30_000;
 const metadataUrl = `${publicUrl}/.well-known/oauth-protected-resource`;
 
