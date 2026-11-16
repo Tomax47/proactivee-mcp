@@ -14,6 +14,8 @@ export interface ToolDef {
   name: string;
   description: string;
   readOnly: boolean;
+  /** Removes or discards data; clients may ask the user to confirm. */
+  destructive: boolean;
   shape: z.ZodRawShape;
   run: (client: ProactiveClient, args: Record<string, never>) => Promise<unknown>;
 }
@@ -23,16 +25,143 @@ function tool<S extends z.ZodRawShape>(def: {
   name: string;
   description: string;
   readOnly: boolean;
+  destructive?: boolean;
   shape: S;
   run: (client: ProactiveClient, args: z.infer<z.ZodObject<S>>) => Promise<unknown>;
 }): ToolDef {
-  return def as unknown as ToolDef;
+  return { destructive: false, ...def } as unknown as ToolDef;
+}
+
+const TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
+const TASK_TYPES = ["FEATURE", "TESTS", "BUG_FIX", "UI_UPDATE", "PERFORMANCE_UPLIFT", "INVESTIGATION"] as const;
+const BUG_SEVERITIES = ["LOW", "MODERATE", "HIGH", "CRITICAL", "FATAL"] as const;
+const PROJECT_STATUSES = ["ACTIVE", "PAUSED", "FINISHED", "ARCHIVED", "DISCARDED"] as const;
+
+const taskFields = {
+  title: z.string().min(1).max(255),
+  description: z.string().optional(),
+  status: z.enum(TASK_STATUSES).optional(),
+  priority: z.enum(TASK_PRIORITIES).optional(),
+  type: z.enum(TASK_TYPES),
+  bug_severity: z.enum(BUG_SEVERITIES).optional().describe("Only valid when type is BUG_FIX"),
+  assigned_to_id: z.string().optional().describe("User id of the assignee"),
+  due_date: z.string().optional().describe("ISO date"),
+  estimated_hours: z.number().min(0).optional(),
+};
+
+function taskBody(a: Record<string, unknown>): Record<string, unknown> {
+  const map: Record<string, string> = {
+    bug_severity: "bugSeverity",
+    assigned_to_id: "assignedToId",
+    due_date: "dueDate",
+    estimated_hours: "estimatedHours",
+  };
+  return Object.fromEntries(
+    Object.entries(a)
+      .filter(([k, v]) => v !== undefined && k !== "project_id" && k !== "task_id")
+      .map(([k, v]) => [map[k] ?? k, v]),
+  );
+}
+
+const tags = z.array(z.string().min(1).max(50)).max(6).describe("Up to 6 unique tags");
+const categoryId = z.string().nullable().optional().describe("Knowledge category id");
+
+/** Knowledge vault collections: list/get/create/update/delete, all user-scoped. */
+const KNOWLEDGE: { key: string; singular: string; create: z.ZodRawShape }[] = [
+  { key: "prompts", singular: "prompt", create: { title: z.string().min(1).max(255), prompt: z.string().min(1).max(20000), category_id: categoryId, tags } },
+  {
+    key: "runbooks",
+    singular: "runbook",
+    create: {
+      title: z.string().min(1).max(255),
+      category_id: categoryId,
+      tags,
+      steps: z.array(z.object({ command: z.string().min(1).max(10000), position: z.number().int().min(0) })).min(1),
+    },
+  },
+  { key: "commands", singular: "command", create: { title: z.string().min(1).max(255), command: z.string().min(1).max(10000), category_id: categoryId, tags } },
+  {
+    key: "resources",
+    singular: "resource",
+    create: {
+      title: z.string().min(1).max(255),
+      type: z.enum(["LINK", "VIDEO", "NOTE", "DOCUMENTATION"]),
+      url: z.string().optional().describe("Required unless type is NOTE"),
+      notes: z.string().optional(),
+      category_id: categoryId,
+      public_access: z.boolean().optional().describe("Defaults to false"),
+      tags: tags.optional(),
+    },
+  },
+  { key: "categories", singular: "category", create: { name: z.string().min(1).max(100), color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).describe("Hex color, e.g. #FF5733") } },
+];
+
+function knowledgeBody(a: Record<string, unknown>): Record<string, unknown> {
+  const map: Record<string, string> = { category_id: "categoryId", public_access: "publicAccess" };
+  return Object.fromEntries(
+    Object.entries(a)
+      .filter(([k, v]) => v !== undefined && k !== "id")
+      .map(([k, v]) => [map[k] ?? k, v]),
+  );
+}
+
+function knowledgeTools(): ToolDef[] {
+  return KNOWLEDGE.flatMap(({ key, singular, create }) => {
+    const base = `/api/v1/knowledge-vault/${key}`;
+    const optional = Object.fromEntries(Object.entries(create).map(([k, v]) => [k, (v as z.ZodTypeAny).optional()])) as z.ZodRawShape;
+    const idShape = { id: id(`${singular} id`) };
+    const def = (d: Omit<ToolDef, "run"> & { run: (c: ProactiveClient, a: Record<string, unknown>) => Promise<unknown> }) => d as unknown as ToolDef;
+    return [
+      def({
+        name: `knowledge_${key}_list`,
+        description: `List ${key} from the knowledge vault.`,
+        readOnly: true,
+        destructive: false,
+        shape: { page, page_size: pageSize },
+        run: (c, a) => c.request("GET", base, { query: { page: a.page as number, pageSize: a.page_size as number } }),
+      }),
+      def({
+        name: `knowledge_${singular}_get`,
+        description: `Get one ${singular} from the knowledge vault.`,
+        readOnly: true,
+        destructive: false,
+        shape: idShape,
+        run: (c, a) => c.request("GET", `${base}/${seg(String(a.id))}`),
+      }),
+      def({
+        name: `knowledge_${singular}_create`,
+        description: `Create a ${singular} in the knowledge vault.`,
+        readOnly: false,
+        destructive: false,
+        shape: create,
+        run: (c, a) => c.request("POST", base, { body: knowledgeBody(a) }),
+      }),
+      def({
+        name: `knowledge_${singular}_update`,
+        description: `Update a ${singular}. Send only the fields to change.`,
+        readOnly: false,
+        destructive: false,
+        shape: { ...idShape, ...optional },
+        run: (c, a) => c.request("PATCH", `${base}/${seg(String(a.id))}`, { body: knowledgeBody(a) }),
+      }),
+      def({
+        name: `knowledge_${singular}_delete`,
+        description: `Permanently delete a ${singular} from the knowledge vault. Destructive.`,
+        readOnly: false,
+        destructive: true,
+        shape: idShape,
+        run: (c, a) => c.request("DELETE", `${base}/${seg(String(a.id))}`),
+      }),
+    ];
+  });
 }
 
 /**
- * The complete tool surface. Deliberately small: no deletes, no project or
- * repository management, no reports, no assistant. Anything added here must
- * also be on the server-side IDE route allowlist (lib/api-tokens/ide-policy.ts).
+ * The complete tool surface. Anything added here must also be on the
+ * server-side IDE route allowlist (lib/api-tokens/ide-policy.ts), which is what
+ * actually limits a token. Still excluded: repository management, reports, the
+ * assistant, integrations and token endpoints. Projects have no hard delete in
+ * Proactive; project_delete sets status DISCARDED.
  */
 export const TOOLS: ToolDef[] = [
   tool({
@@ -127,19 +256,69 @@ export const TOOLS: ToolDef[] = [
     run: (c, a) => c.request("GET", `/api/v1/github/pull-requests/${seg(a.github_pr_id)}/logs`),
   }),
   tool({
-    name: "knowledge_prompts_list",
-    description: "List saved AI prompts from the knowledge vault (read-only context).",
+    name: "project_get",
+    description: "Get one project.",
     readOnly: true,
-    shape: { page, page_size: pageSize },
-    run: (c, a) => c.request("GET", "/api/v1/knowledge-vault/prompts", { query: { page: a.page, pageSize: a.page_size } as Query }),
+    shape: { project_id: id("Project id") },
+    run: (c, a) => c.request("GET", `/api/v1/projects/${seg(a.project_id)}`),
   }),
   tool({
-    name: "knowledge_runbooks_list",
-    description: "List runbooks from the knowledge vault (read-only context).",
-    readOnly: true,
-    shape: { page, page_size: pageSize },
-    run: (c, a) => c.request("GET", "/api/v1/knowledge-vault/runbooks", { query: { page: a.page, pageSize: a.page_size } as Query }),
+    name: "project_create",
+    description: "Create a project. Not available to tokens limited to specific projects.",
+    readOnly: false,
+    shape: { name: z.string().min(1).max(255), description: z.string().optional(), status: z.enum(PROJECT_STATUSES).default("ACTIVE") },
+    run: (c, a) => c.request("POST", "/api/v1/projects", { body: a }),
   }),
+  tool({
+    name: "project_update",
+    description: "Update a project's name, description or status. Send only the fields to change.",
+    readOnly: false,
+    shape: {
+      project_id: id("Project id"),
+      name: z.string().min(1).max(255).optional(),
+      description: z.string().optional(),
+      status: z.enum(PROJECT_STATUSES).optional(),
+    },
+    run: (c, a) => {
+      const { project_id, ...body } = a;
+      return c.request("PATCH", `/api/v1/projects/${seg(project_id)}`, { body });
+    },
+  }),
+  tool({
+    name: "project_delete",
+    description: "Delete a project. Proactive has no hard delete, so this sets the status to DISCARDED (reversible with project_update). Destructive.",
+    readOnly: false,
+    destructive: true,
+    shape: { project_id: id("Project id") },
+    run: (c, a) => c.request("PATCH", `/api/v1/projects/${seg(a.project_id)}`, { body: { status: "DISCARDED" } }),
+  }),
+  tool({
+    name: "task_create",
+    description: "Create a task in a project.",
+    readOnly: false,
+    shape: { project_id: id("Project id"), ...taskFields },
+    run: (c, a) => c.request("POST", `/api/v1/projects/${seg(a.project_id)}/tasks`, { body: taskBody(a) }),
+  }),
+  tool({
+    name: "task_update",
+    description: "Update task fields (title, description, status, priority, type, assignee, due date, estimate). Send only the fields to change.",
+    readOnly: false,
+    shape: {
+      project_id: id("Project id"),
+      task_id: id("Task id"),
+      ...Object.fromEntries(Object.entries(taskFields).map(([k, v]) => [k, (v as z.ZodTypeAny).optional()])),
+    },
+    run: (c, a) => c.request("PATCH", `/api/v1/projects/${seg(a.project_id)}/tasks/${seg(a.task_id)}`, { body: taskBody(a) }),
+  }),
+  tool({
+    name: "task_delete",
+    description: "Delete a task (it is discarded and hidden from lists). Destructive.",
+    readOnly: false,
+    destructive: true,
+    shape: { project_id: id("Project id"), task_id: id("Task id") },
+    run: (c, a) => c.request("DELETE", `/api/v1/projects/${seg(a.project_id)}/tasks/${seg(a.task_id)}`),
+  }),
+  ...knowledgeTools(),
 ];
 
 export function formatResult(data: unknown): string {

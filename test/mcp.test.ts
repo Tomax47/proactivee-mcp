@@ -1,3 +1,4 @@
+import { z } from "zod";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,12 +26,56 @@ function setup(fetchImpl: typeof fetch, access = future()) {
 }
 
 describe("tool surface", () => {
-  it("exposes no delete/create/admin tools", () => {
-    for (const t of TOOLS) assert.doesNotMatch(t.name, /delete|remove|unlink|create|report|assistant|repositories/);
+  it("exposes no repository, report, assistant or token tools", () => {
+    for (const t of TOOLS) assert.doesNotMatch(t.name, /report|assistant|repositor|token|integration/);
+  });
+
+  it("marks exactly the delete tools as destructive", () => {
     assert.deepEqual(
-      TOOLS.filter((t) => !t.readOnly).map((t) => t.name).sort(),
-      ["task_link_pull_request", "task_update_status"],
+      TOOLS.filter((t) => t.destructive).map((t) => t.name).sort(),
+      [
+        "knowledge_category_delete", "knowledge_command_delete", "knowledge_prompt_delete",
+        "knowledge_resource_delete", "knowledge_runbook_delete", "project_delete", "task_delete",
+      ],
     );
+    for (const t of TOOLS.filter((x) => x.destructive)) assert.equal(t.readOnly, false);
+  });
+
+  it("maps writes to the expected requests", async () => {
+    const seen: { url: string; method?: string; body?: string }[] = [];
+    const { client } = setup((async (url: URL, init: RequestInit) => {
+      seen.push({ url: String(url), method: init.method, body: init.body as string });
+      return ok({});
+    }) as unknown as typeof fetch);
+    const run = (name: string, args: Record<string, unknown>) => {
+      const def = TOOLS.find((t) => t.name === name)!;
+      return def.run(client, z.object(def.shape).parse(args) as never);
+    };
+    await run("task_create", { project_id: "p1", title: "T", type: "FEATURE", assigned_to_id: "u1", estimated_hours: 2 });
+    await run("task_update", { project_id: "p1", task_id: "t1", due_date: "2026-12-01" });
+    await run("task_delete", { project_id: "p1", task_id: "t1" });
+    await run("project_delete", { project_id: "p1" });
+    await run("knowledge_prompt_update", { id: "k1", category_id: null });
+    await run("knowledge_resource_create", { title: "R", type: "NOTE", public_access: true });
+    await run("knowledge_category_delete", { id: "c/1" });
+    assert.deepEqual(
+      seen.map((s) => `${s.method} ${new URL(s.url).pathname}`),
+      [
+        "POST /api/v1/projects/p1/tasks",
+        "PATCH /api/v1/projects/p1/tasks/t1",
+        "DELETE /api/v1/projects/p1/tasks/t1",
+        "PATCH /api/v1/projects/p1",
+        "PATCH /api/v1/knowledge-vault/prompts/k1",
+        "POST /api/v1/knowledge-vault/resources",
+        "DELETE /api/v1/knowledge-vault/categories/c%2F1",
+      ],
+    );
+    assert.deepEqual(JSON.parse(seen[0].body!), { title: "T", type: "FEATURE", assignedToId: "u1", estimatedHours: 2 });
+    assert.deepEqual(JSON.parse(seen[1].body!), { dueDate: "2026-12-01" });
+    assert.deepEqual(JSON.parse(seen[3].body!), { status: "DISCARDED" });
+    assert.deepEqual(JSON.parse(seen[4].body!), { categoryId: null });
+    assert.deepEqual(JSON.parse(seen[5].body!), { title: "R", type: "NOTE", publicAccess: true });
+    assert.equal(seen[6].body, undefined);
   });
 
   it("task_update_status sends only the status field", async () => {
