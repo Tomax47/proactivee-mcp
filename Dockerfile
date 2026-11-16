@@ -12,5 +12,5 @@ COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile --production --ignore-scripts && yarn cache clean
 COPY --from=build /app/build ./build
 USER node
-EXPOSE 3000
+EXPOSE 4600
 CMD ["node", "build/http.js"]
