@@ -1,10 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { ApiError, type ProactiveClient } from "./client.js";
+import { SERVER_INSTRUCTIONS } from "./richText.js";
 import { TOOLS, formatResult } from "./tools.js";
 
 export function createServer(client: ProactiveClient): McpServer {
-  const server = new McpServer({ name: "proactive-ide", version: "0.1.0" });
+  const server = new McpServer({ name: "proactive-ide", version: "0.1.0" }, { instructions: SERVER_INSTRUCTIONS });
   // Tool shapes are dynamic here, which makes the SDK's generic overloads blow
   // up the type checker; validation is done explicitly with zod below.
   const register = server.tool.bind(server) as unknown as (
