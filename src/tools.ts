@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ProactiveClient, Query } from "./client.js";
+import { RICH_TEXT_FIELD } from "./richText.js";
 
 export const MAX_OUTPUT_CHARS = 20_000;
 
@@ -39,7 +40,7 @@ const PROJECT_STATUSES = ["ACTIVE", "PAUSED", "FINISHED", "ARCHIVED", "DISCARDED
 
 const taskFields = {
   title: z.string().min(1).max(255),
-  description: z.string().optional(),
+  description: z.string().optional().describe(RICH_TEXT_FIELD),
   status: z.enum(TASK_STATUSES).optional(),
   priority: z.enum(TASK_PRIORITIES).optional(),
   type: z.enum(TASK_TYPES),
@@ -87,7 +88,7 @@ const KNOWLEDGE: { key: string; singular: string; create: z.ZodRawShape }[] = [
       title: z.string().min(1).max(255),
       type: z.enum(["LINK", "VIDEO", "NOTE", "DOCUMENTATION"]),
       url: z.string().optional().describe("Required unless type is NOTE"),
-      notes: z.string().optional(),
+      notes: z.string().optional().describe(RICH_TEXT_FIELD),
       category_id: categoryId,
       public_access: z.boolean().optional().describe("Defaults to false"),
       tags: tags.optional(),
@@ -110,6 +111,7 @@ function knowledgeTools(): ToolDef[] {
     const base = `/api/v1/knowledge-vault/${key}`;
     const optional = Object.fromEntries(Object.entries(create).map(([k, v]) => [k, (v as z.ZodTypeAny).optional()])) as z.ZodRawShape;
     const idShape = { id: id(`${singular} id`) };
+    const richNote = key === "resources" ? " The notes field is rich text: write it as HTML (see the notes field for the supported formatting)." : "";
     const def = (d: Omit<ToolDef, "run"> & { run: (c: ProactiveClient, a: Record<string, unknown>) => Promise<unknown> }) => d as unknown as ToolDef;
     return [
       def({
@@ -130,7 +132,7 @@ function knowledgeTools(): ToolDef[] {
       }),
       def({
         name: `knowledge_${singular}_create`,
-        description: `Create a ${singular} in the knowledge vault.`,
+        description: `Create a ${singular} in the knowledge vault.${richNote}`,
         readOnly: false,
         destructive: false,
         shape: create,
@@ -138,7 +140,7 @@ function knowledgeTools(): ToolDef[] {
       }),
       def({
         name: `knowledge_${singular}_update`,
-        description: `Update a ${singular}. Send only the fields to change.`,
+        description: `Update a ${singular}. Send only the fields to change.${richNote}`,
         readOnly: false,
         destructive: false,
         shape: { ...idShape, ...optional },
@@ -266,7 +268,7 @@ export const TOOLS: ToolDef[] = [
     name: "project_create",
     description: "Create a project. Not available to tokens limited to specific projects.",
     readOnly: false,
-    shape: { name: z.string().min(1).max(255), description: z.string().optional(), status: z.enum(PROJECT_STATUSES).default("ACTIVE") },
+    shape: { name: z.string().min(1).max(255), description: z.string().optional().describe(RICH_TEXT_FIELD), status: z.enum(PROJECT_STATUSES).default("ACTIVE") },
     run: (c, a) => c.request("POST", "/api/v1/projects", { body: a }),
   }),
   tool({
@@ -276,7 +278,7 @@ export const TOOLS: ToolDef[] = [
     shape: {
       project_id: id("Project id"),
       name: z.string().min(1).max(255).optional(),
-      description: z.string().optional(),
+      description: z.string().optional().describe(RICH_TEXT_FIELD),
       status: z.enum(PROJECT_STATUSES).optional(),
     },
     run: (c, a) => {
@@ -294,14 +296,14 @@ export const TOOLS: ToolDef[] = [
   }),
   tool({
     name: "task_create",
-    description: "Create a task in a project.",
+    description: "Create a task in a project. The description is rich text: write it as HTML (see the description field for the supported formatting).",
     readOnly: false,
     shape: { project_id: id("Project id"), ...taskFields },
     run: (c, a) => c.request("POST", `/api/v1/projects/${seg(a.project_id)}/tasks`, { body: taskBody(a) }),
   }),
   tool({
     name: "task_update",
-    description: "Update task fields (title, description, status, priority, type, assignee, due date, estimate). Send only the fields to change.",
+    description: "Update task fields (title, description, status, priority, type, assignee, due date, estimate). Send only the fields to change. The description is rich text HTML and is replaced as a whole, so fetch it with task_get first when editing.",
     readOnly: false,
     shape: {
       project_id: id("Project id"),
