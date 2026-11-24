@@ -71,6 +71,16 @@ const categoryId = z.string().nullable().optional().describe("Knowledge category
 const KNOWLEDGE: { key: string; singular: string; create: z.ZodRawShape }[] = [
   { key: "prompts", singular: "prompt", create: { title: z.string().min(1).max(255), prompt: z.string().min(1).max(20000), category_id: categoryId, tags } },
   {
+    key: "skills",
+    singular: "skill",
+    create: {
+      title: z.string().min(1).max(255),
+      description: z.string().max(5000).nullable().optional().describe("Plain text: what the skill does and when to use it"),
+      category_id: categoryId,
+      tags,
+    },
+  },
+  {
     key: "runbooks",
     singular: "runbook",
     create: {
@@ -112,6 +122,8 @@ function knowledgeTools(): ToolDef[] {
     const optional = Object.fromEntries(Object.entries(create).map(([k, v]) => [k, (v as z.ZodTypeAny).optional()])) as z.ZodRawShape;
     const idShape = { id: id(`${singular} id`) };
     const richNote = key === "resources" ? " The notes field is rich text: write it as HTML (see the notes field for the supported formatting)." : "";
+    const skillNote =
+      key === "skills" ? " Metadata only: the skill's .md or .zip file can only be uploaded or replaced in the Proactive app." : "";
     const def = (d: Omit<ToolDef, "run"> & { run: (c: ProactiveClient, a: Record<string, unknown>) => Promise<unknown> }) => d as unknown as ToolDef;
     return [
       def({
@@ -132,7 +144,7 @@ function knowledgeTools(): ToolDef[] {
       }),
       def({
         name: `knowledge_${singular}_create`,
-        description: `Create a ${singular} in the knowledge vault.${richNote}`,
+        description: `Create a ${singular} in the knowledge vault.${richNote}${skillNote}`,
         readOnly: false,
         destructive: false,
         shape: create,
@@ -140,7 +152,7 @@ function knowledgeTools(): ToolDef[] {
       }),
       def({
         name: `knowledge_${singular}_update`,
-        description: `Update a ${singular}. Send only the fields to change.${richNote}`,
+        description: `Update a ${singular}. Send only the fields to change.${richNote}${skillNote}`,
         readOnly: false,
         destructive: false,
         shape: { ...idShape, ...optional },
@@ -148,7 +160,7 @@ function knowledgeTools(): ToolDef[] {
       }),
       def({
         name: `knowledge_${singular}_delete`,
-        description: `Permanently delete a ${singular} from the knowledge vault. Destructive.`,
+        description: `Permanently delete a ${singular} from the knowledge vault.${key === "skills" ? " Its uploaded file is deleted too." : ""} Destructive.`,
         readOnly: false,
         destructive: true,
         shape: idShape,

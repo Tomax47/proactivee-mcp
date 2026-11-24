@@ -46,7 +46,8 @@ Write: `project_create`, `project_update`, `task_create`, `task_update`, `task_u
 `task_link_pull_request`, and `knowledge_<kind>_create` / `_update`.
 Destructive (flagged `destructiveHint`): `project_delete`, `task_delete`, `knowledge_<kind>_delete`.
 
-`<kind>` is one of `prompt`, `runbook`, `command`, `resource`, `category`. Proactive has no hard project delete,
+`<kind>` is one of `prompt`, `runbook`, `command`, `resource`, `skill`, `category`. Skill tools handle metadata
+only (title, description, category, tags); the skill's `.md` or `.zip` file is uploaded in the Proactive app. Proactive has no hard project delete,
 so `project_delete` sets the status to `DISCARDED` (reversible with `project_update`). Tokens limited to specific
 projects cannot create projects, and the knowledge vault is per user, not per project.
 
