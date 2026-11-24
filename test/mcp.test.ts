@@ -58,6 +58,7 @@ describe("tool surface", () => {
     await run("knowledge_prompt_update", { id: "k1", category_id: null });
     await run("knowledge_resource_create", { title: "R", type: "NOTE", public_access: true });
     await run("knowledge_category_delete", { id: "c/1" });
+    await run("knowledge_resource_create", { title: "S", type: "SCRIPT", script: "ls -la", script_language: "bash" });
     assert.deepEqual(
       seen.map((s) => `${s.method} ${new URL(s.url).pathname}`),
       [
@@ -68,6 +69,7 @@ describe("tool surface", () => {
         "PATCH /api/v1/knowledge-vault/prompts/k1",
         "POST /api/v1/knowledge-vault/resources",
         "DELETE /api/v1/knowledge-vault/categories/c%2F1",
+        "POST /api/v1/knowledge-vault/resources",
       ],
     );
     assert.deepEqual(JSON.parse(seen[0].body!), { title: "T", type: "FEATURE", assignedToId: "u1", estimatedHours: 2 });
@@ -76,6 +78,7 @@ describe("tool surface", () => {
     assert.deepEqual(JSON.parse(seen[4].body!), { categoryId: null });
     assert.deepEqual(JSON.parse(seen[5].body!), { title: "R", type: "NOTE", publicAccess: true });
     assert.equal(seen[6].body, undefined);
+    assert.deepEqual(JSON.parse(seen[7].body!), { title: "S", type: "SCRIPT", script: "ls -la", scriptLanguage: "bash" });
   });
 
   it("task_update_status sends only the status field", async () => {

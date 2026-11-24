@@ -67,6 +67,13 @@ function taskBody(a: Record<string, unknown>): Record<string, unknown> {
 const tags = z.array(z.string().min(1).max(50)).max(6).describe("Up to 6 unique tags");
 const categoryId = z.string().nullable().optional().describe("Knowledge category id");
 
+/** Languages the app accepts for a SCRIPT resource (lib/constants/codeLanguages.ts in Proactive). */
+const SCRIPT_LANGUAGES = [
+  "plaintext", "bash", "javascript", "typescript", "jsx", "tsx", "json", "html", "css", "markdown", "python", "sql", "yaml",
+  "c", "cpp", "csharp", "go", "rust", "java", "kotlin", "swift",
+  "php", "ruby", "graphql", "xml", "toml", "docker", "lua", "r", "scala", "haskell",
+] as const;
+
 /** Knowledge vault collections: list/get/create/update/delete, all user-scoped. */
 const KNOWLEDGE: { key: string; singular: string; create: z.ZodRawShape }[] = [
   { key: "prompts", singular: "prompt", create: { title: z.string().min(1).max(255), prompt: z.string().min(1).max(20000), category_id: categoryId, tags } },
@@ -86,9 +93,11 @@ const KNOWLEDGE: { key: string; singular: string; create: z.ZodRawShape }[] = [
     singular: "resource",
     create: {
       title: z.string().min(1).max(255),
-      type: z.enum(["LINK", "VIDEO", "NOTE", "DOCUMENTATION"]),
-      url: z.string().optional().describe("Required unless type is NOTE"),
+      type: z.enum(["LINK", "VIDEO", "NOTE", "DOCUMENTATION", "SCRIPT"]),
+      url: z.string().optional().describe("Required unless type is NOTE or SCRIPT"),
       notes: z.string().optional().describe(RICH_TEXT_FIELD),
+      script: z.string().max(100000).optional().describe("Code snippet, kept verbatim (plain text, not HTML). Required when type is SCRIPT"),
+      script_language: z.enum(SCRIPT_LANGUAGES).nullable().optional().describe("Syntax highlighting language for a SCRIPT. Defaults to plaintext"),
       category_id: categoryId,
       public_access: z.boolean().optional().describe("Defaults to false"),
       tags: tags.optional(),
@@ -98,7 +107,7 @@ const KNOWLEDGE: { key: string; singular: string; create: z.ZodRawShape }[] = [
 ];
 
 function knowledgeBody(a: Record<string, unknown>): Record<string, unknown> {
-  const map: Record<string, string> = { category_id: "categoryId", public_access: "publicAccess" };
+  const map: Record<string, string> = { category_id: "categoryId", public_access: "publicAccess", script_language: "scriptLanguage" };
   return Object.fromEntries(
     Object.entries(a)
       .filter(([k, v]) => v !== undefined && k !== "id")
