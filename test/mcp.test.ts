@@ -35,7 +35,7 @@ describe("tool surface", () => {
       TOOLS.filter((t) => t.destructive).map((t) => t.name).sort(),
       [
         "knowledge_category_delete", "knowledge_command_delete", "knowledge_prompt_delete",
-        "knowledge_resource_delete", "knowledge_runbook_delete", "project_delete", "task_delete",
+        "knowledge_resource_delete", "knowledge_runbook_delete", "knowledge_skill_delete", "project_delete", "task_delete",
       ],
     );
     for (const t of TOOLS.filter((x) => x.destructive)) assert.equal(t.readOnly, false);
@@ -58,6 +58,8 @@ describe("tool surface", () => {
     await run("knowledge_prompt_update", { id: "k1", category_id: null });
     await run("knowledge_resource_create", { title: "R", type: "NOTE", public_access: true });
     await run("knowledge_category_delete", { id: "c/1" });
+    await run("knowledge_skill_create", { title: "S", description: "Writes notes", category_id: "c1", tags: ["docs"] });
+    await run("knowledge_skill_update", { id: "s1", description: null });
     assert.deepEqual(
       seen.map((s) => `${s.method} ${new URL(s.url).pathname}`),
       [
@@ -68,6 +70,8 @@ describe("tool surface", () => {
         "PATCH /api/v1/knowledge-vault/prompts/k1",
         "POST /api/v1/knowledge-vault/resources",
         "DELETE /api/v1/knowledge-vault/categories/c%2F1",
+        "POST /api/v1/knowledge-vault/skills",
+        "PATCH /api/v1/knowledge-vault/skills/s1",
       ],
     );
     assert.deepEqual(JSON.parse(seen[0].body!), { title: "T", type: "FEATURE", assignedToId: "u1", estimatedHours: 2 });
@@ -76,6 +80,8 @@ describe("tool surface", () => {
     assert.deepEqual(JSON.parse(seen[4].body!), { categoryId: null });
     assert.deepEqual(JSON.parse(seen[5].body!), { title: "R", type: "NOTE", publicAccess: true });
     assert.equal(seen[6].body, undefined);
+    assert.deepEqual(JSON.parse(seen[7].body!), { title: "S", description: "Writes notes", categoryId: "c1", tags: ["docs"] });
+    assert.deepEqual(JSON.parse(seen[8].body!), { description: null });
   });
 
   it("exposes github_pull_request_merge_readiness_get as a read-only tool", () => {
