@@ -105,6 +105,33 @@ describe("tool surface", () => {
     assert.equal(seen!.body, undefined);
   });
 
+  it("knowledge_search, task_context_pack_get and vector_ask issue the expected requests", async () => {
+    const seen: { url: string; method?: string; body?: string }[] = [];
+    const { client } = setup((async (url: URL, init: RequestInit) => {
+      seen.push({ url: String(url), method: init.method, body: init.body as string });
+      return ok({});
+    }) as unknown as typeof fetch);
+    const run = async (name: string, args: Record<string, unknown>) => {
+      const def = TOOLS.find((t) => t.name === name)!;
+      assert.equal(def.readOnly, true);
+      await def.run(client, z.object(def.shape).parse(args) as never);
+    };
+    await run("knowledge_search", { query: "deploy notes", types: ["runbook", "prompt"], limit: 5 });
+    await run("task_context_pack_get", { project_id: "p/1", task_id: "t1" });
+    await run("vector_ask", { prompt: "What is due today?" });
+    assert.equal(seen[0].method, "GET");
+    assert.equal(
+      seen[0].url,
+      "https://app.test/api/v1/knowledge-vault/search?q=deploy+notes&types=runbook%2Cprompt&limit=5",
+    );
+    assert.equal(seen[0].body, undefined);
+    assert.equal(seen[1].method, "GET");
+    assert.equal(seen[1].url, "https://app.test/api/v1/projects/p%2F1/tasks/t1/context-pack");
+    assert.equal(seen[2].method, "POST");
+    assert.equal(seen[2].url, "https://app.test/api/v1/assistant/ask");
+    assert.deepEqual(JSON.parse(seen[2].body!), { prompt: "What is due today?" });
+  });
+
   it("knowledge_resource_update maps access_level and access_domain", async () => {
     let seen: { url: string; method?: string; body?: string } | null = null;
     const { client } = setup((async (url: URL, init: RequestInit) => {
