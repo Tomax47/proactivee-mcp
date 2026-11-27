@@ -78,6 +78,27 @@ describe("tool surface", () => {
     assert.equal(seen[6].body, undefined);
   });
 
+  it("exposes github_pull_request_merge_readiness_get as a read-only tool", () => {
+    const def = TOOLS.find((t) => t.name === "github_pull_request_merge_readiness_get");
+    assert.ok(def);
+    assert.equal(def.readOnly, true);
+    assert.equal(def.destructive, false);
+    assert.deepEqual(Object.keys(def.shape), ["github_pr_id"]);
+  });
+
+  it("github_pull_request_merge_readiness_get issues the expected GET", async () => {
+    let seen: { url: string; method?: string; body?: string } | null = null;
+    const { client } = setup((async (url: URL, init: RequestInit) => {
+      seen = { url: String(url), method: init.method, body: init.body as string };
+      return ok({ ready: false, items: [] });
+    }) as unknown as typeof fetch);
+    const def = TOOLS.find((t) => t.name === "github_pull_request_merge_readiness_get")!;
+    await def.run(client, z.object(def.shape).parse({ github_pr_id: "pr/1" }) as never);
+    assert.equal(seen!.method, "GET");
+    assert.equal(seen!.url, "https://app.test/api/v1/github/pull-requests/pr%2F1/merge-readiness");
+    assert.equal(seen!.body, undefined);
+  });
+
   it("task_update_status sends only the status field", async () => {
     let seen: { url: string; method?: string; body?: string } | null = null;
     const { client } = setup((async (url: URL, init: RequestInit) => {
