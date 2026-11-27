@@ -105,6 +105,20 @@ describe("tool surface", () => {
     assert.equal(seen!.body, undefined);
   });
 
+  it("knowledge_resource_update maps access_level and access_domain", async () => {
+    let seen: { url: string; method?: string; body?: string } | null = null;
+    const { client } = setup((async (url: URL, init: RequestInit) => {
+      seen = { url: String(url), method: init.method, body: init.body as string };
+      return ok({});
+    }) as unknown as typeof fetch);
+    const def = TOOLS.find((t) => t.name === "knowledge_resource_update")!;
+    const args = z.object(def.shape).parse({ id: "r1", access_level: "ORGANIZATION", access_domain: "acme.com" });
+    await def.run(client, args as never);
+    assert.equal(seen!.method, "PATCH");
+    assert.deepEqual(JSON.parse(seen!.body!), { accessLevel: "ORGANIZATION", accessDomain: "acme.com" });
+    assert.throws(() => z.object(def.shape).parse({ id: "r1", access_level: "TEAM" }));
+  });
+
   it("task_update_status sends only the status field", async () => {
     let seen: { url: string; method?: string; body?: string } | null = null;
     const { client } = setup((async (url: URL, init: RequestInit) => {

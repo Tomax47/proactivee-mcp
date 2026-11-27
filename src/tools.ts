@@ -100,7 +100,17 @@ const KNOWLEDGE: { key: string; singular: string; create: z.ZodRawShape }[] = [
       url: z.string().optional().describe("Required unless type is NOTE"),
       notes: z.string().optional().describe(RICH_TEXT_FIELD),
       category_id: categoryId,
-      public_access: z.boolean().optional().describe("Defaults to false"),
+      access_level: z
+        .enum(["PRIVATE", "ONLY_ME", "ORGANIZATION", "EVERYONE"])
+        .optional()
+        .describe(
+          "Who can open the share link. PRIVATE (default) turns it off, ONLY_ME needs the owner signed in, ORGANIZATION needs a signed-in viewer with an email on access_domain, EVERYONE is anyone with the link.",
+        ),
+      access_domain: z
+        .string()
+        .optional()
+        .describe("Work-email domain for ORGANIZATION, e.g. acme.com. Must be the domain of one of the user's linked emails. Optional when the user has exactly one work domain."),
+      public_access: z.boolean().optional().describe("Deprecated, use access_level. true = EVERYONE, false = PRIVATE. Ignored when access_level is set."),
       tags: tags.optional(),
     },
   },
@@ -108,7 +118,12 @@ const KNOWLEDGE: { key: string; singular: string; create: z.ZodRawShape }[] = [
 ];
 
 function knowledgeBody(a: Record<string, unknown>): Record<string, unknown> {
-  const map: Record<string, string> = { category_id: "categoryId", public_access: "publicAccess" };
+  const map: Record<string, string> = {
+    category_id: "categoryId",
+    public_access: "publicAccess",
+    access_level: "accessLevel",
+    access_domain: "accessDomain",
+  };
   return Object.fromEntries(
     Object.entries(a)
       .filter(([k, v]) => v !== undefined && k !== "id")
