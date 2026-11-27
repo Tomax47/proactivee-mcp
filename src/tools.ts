@@ -258,6 +258,15 @@ export const TOOLS: ToolDef[] = [
     run: (c, a) => c.request("GET", `/api/v1/github/pull-requests/${seg(a.github_pr_id)}/logs`),
   }),
   tool({
+    name: "github_pull_request_merge_readiness_get",
+    description:
+      "What is still needed before a pull request can be merged (unresolved review items, checks, review requests, linked task), blocking first.",
+    readOnly: true,
+    shape: { github_pr_id: id("githubPrId from github_pull_requests_list") },
+    run: (c, a) =>
+      c.request("GET", `/api/v1/github/pull-requests/${seg(a.github_pr_id)}/merge-readiness`),
+  }),
+  tool({
     name: "project_get",
     description: "Get one project.",
     readOnly: true,
