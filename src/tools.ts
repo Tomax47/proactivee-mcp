@@ -356,6 +356,35 @@ export const TOOLS: ToolDef[] = [
     shape: { project_id: id("Project id"), task_id: id("Task id") },
     run: (c, a) => c.request("DELETE", `/api/v1/projects/${seg(a.project_id)}/tasks/${seg(a.task_id)}`),
   }),
+  tool({
+    name: "knowledge_search",
+    description: "Search the knowledge vault (resources, commands, runbooks, prompts and skills). Returns matching hits with type, title and snippet.",
+    readOnly: true,
+    shape: {
+      query: z.string().min(1).max(500).describe("Search text"),
+      types: z.array(z.string().min(1).max(50)).max(10).optional().describe("Restrict to these hit types"),
+      limit: z.number().int().min(1).max(50).optional().describe("Maximum number of hits"),
+    },
+    run: (c, a) =>
+      c.request("GET", "/api/v1/knowledge-vault/search", {
+        query: { q: a.query, types: a.types?.length ? a.types.join(",") : undefined, limit: a.limit },
+      }),
+  }),
+  tool({
+    name: "task_context_pack_get",
+    description: "Get a ready-made markdown context pack for a task.",
+    readOnly: true,
+    shape: { project_id: id("Project id"), task_id: id("Task id") },
+    run: (c, a) => c.request("GET", `/api/v1/projects/${seg(a.project_id)}/tasks/${seg(a.task_id)}/context-pack`),
+  }),
+  tool({
+    name: "vector_ask",
+    description:
+      "Ask the Proactive assistant a question about your projects, tasks and notes. Works only if you enabled it in Proactive. Uses your configured AI provider.",
+    readOnly: true,
+    shape: { prompt: z.string().min(1).max(4000).describe("Your question") },
+    run: (c, a) => c.request("POST", "/api/v1/assistant/ask", { body: { prompt: a.prompt } }),
+  }),
   ...knowledgeTools(),
 ];
 
